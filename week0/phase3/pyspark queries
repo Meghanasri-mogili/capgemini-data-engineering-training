@@ -20,12 +20,16 @@ daily_sales.show()
 2--->
 from pyspark.sql.functions import col, sum
 from pyspark.sql import SparkSession
+
 spark = SparkSession.builder.appName('Spark Playground').getOrCreate()
+
+# Read customers_raw and filter nulls
 options = {"inferschema": True, "header": True}
 df = spark.read.format("csv").options(**options).load("/datasets/customers_raw.csv")
-df = df.filter((df.customer_id.isNotNull() & df.email.isNotNull()))
+df = df.filter((df.customer_id.isNotNull()) & (df.email.isNotNull()))
 
-customers =spark.read.format('csv').option('header', 'true').load('/samples/customers.csv')
+# Read customers and sales
+customers = spark.read.format('csv').option('header', 'true').load('/samples/customers.csv')
 sales = spark.read.format('csv').option('header', 'true').load('/samples/sales.csv')
 
 # Convert total_amount to numeric
@@ -35,7 +39,7 @@ sales_clean = sales.withColumn("total_amount", col("total_amount").cast("double"
 df = customers.join(sales_clean, "customer_id")
 
 # Group by city and calculate revenue
-city_revenue = df.groupBy("city") 
+city_revenue = df.groupBy("city") \
     .agg(sum("total_amount").alias("total_revenue"))
 
 # Show result
