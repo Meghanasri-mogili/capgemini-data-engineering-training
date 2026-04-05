@@ -25,12 +25,10 @@ Impact the final output
 5) How is SQL similar to PySpark?
 PySpark is very similar to SQL.
 Both use operations like:
-
 SELECT
 JOIN
 GROUP BY
 FILTER
-
 The difference is:
 PySpark works on large, distributed data, while SQL usually works on smaller datasets.
 
