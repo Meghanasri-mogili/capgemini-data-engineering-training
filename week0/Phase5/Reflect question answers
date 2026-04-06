@@ -1,0 +1,14 @@
+1. What challenges did you face in setup?
+I initially faced issues with data loading. Some files were not read properly, so I rechecked file paths and reloaded the data to ensure everything was correct.
+
+2. How did you validate joins?
+I validated joins by checking sample data using .show() and comparing row counts before and after joining.
+I also ensured key columns like order_id and customer_id were matching correctly.
+
+3. How did window functions help?
+Window functions helped me perform operations like ranking and running totals within groups.
+They allowed me to analyze data without losing row-level details.
+
+4. Explain your pipeline
+I started by loading and verifying the data. Then I joined multiple tables to create a unified dataset. After that, I performed aggregations like total spend and sales. 
+Finally, I used window functions for analysis and built a reporting dataset.
