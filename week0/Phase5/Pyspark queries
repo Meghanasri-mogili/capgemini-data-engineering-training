@@ -1,122 +1,117 @@
-#Task 1: Top 3 Customers per City Calculate total spend per customer, then use window function to rank
-customers within each city. Output: city, customer_id, total_spend, rank
-
-
-from pyspark.sql.functions import sum as _sum
+# Task 1: Top 3 Customers per City
+from pyspark.sql.functions import sum, col, dense_rank
 from pyspark.sql.window import Window
-from pyspark.sql.functions import dense_rank
 
-# total spend per customer per city
-cust_spend = fact_orders.groupBy("customer_id", "customer_city") \
-    .agg(_sum("payment_value").alias("total_spend"))
+# Step 1: Join orders, customers, payments
+df = orders.join(customers, "customer_id") \
+           .join(payments, "order_id")
 
-# window for ranking
-window_spec = Window.partitionBy("customer_city").orderBy(col("total_spend").desc())
+# Step 2: Calculate total spend per customer per city
+customer_spend = df.groupBy("customer_id", "customer_city") \
+    .agg(sum("payment_value").alias("total_spent"))
 
-# ranking
-top_customers = cust_spend.withColumn("rank", dense_rank().over(window_spec)) \
-    .filter(col("rank") <= 3)
+# Step 3: Define window (partition by city)
+window_spec = Window.partitionBy("customer_city").orderBy(col("total_spent").desc())
 
-display(top_customers.select(
-    col("customer_city").alias("city"),
-    "customer_id",
-    "total_spend",
-    "rank"
-))
+# Step 4: Rank customers
+ranked_df = customer_spend.withColumn("rank", dense_rank().over(window_spec))
 
-#Task 2: Running Total of Sales Calculate daily sales and then cumulative (running) total using window
-function. Output: date, daily_sales, running_total
+# Step 5: Filter Top 3
+top_3_customers = ranked_df.filter(col("rank") <= 3)
 
-from pyspark.sql.functions import to_date
+# Step 6: Show result
+top_3_customers.show()
 
-daily_sales = fact_orders.withColumn("date", to_date("order_purchase_timestamp")) \
-    .groupBy("date") \
-    .agg(_sum("payment_value").alias("daily_sales"))
 
-window_spec = Window.orderBy("date").rowsBetween(Window.unboundedPreceding, 0)
 
-running_sales = daily_sales.withColumn(
+
+# Task 2: Running Total of Sales
+from pyspark.sql.functions import sum, col, to_date
+from pyspark.sql.window import Window
+
+# Step 1: Join orders + payments
+df = orders.join(payments, "order_id")
+
+# Step 2: Convert timestamp to date
+df = df.withColumn("order_date", to_date("order_purchase_timestamp"))
+
+# Step 3: Aggregate daily sales
+daily_sales = df.groupBy("order_date") \
+    .agg(sum("payment_value").alias("daily_sales"))
+
+# Step 4: Define window (order by date)
+window_spec = Window.orderBy("order_date") \
+    .rowsBetween(Window.unboundedPreceding, Window.currentRow)
+
+# Step 5: Running total
+running_total_df = daily_sales.withColumn(
     "running_total",
-    _sum("daily_sales").over(window_spec)
+    sum("daily_sales").over(window_spec)
 )
 
-display(running_sales)
+# Step 6: Show result
+running_total_df.show()
 
-#Task 3: Top Products per Category Aggregate sales per product, join with category, then rank using
-DENSE_RANK. Output: category, product_id, total_sales, rank
+# Task 3: Top Products per Category
+from pyspark.sql.functions import sum, col, dense_rank
+from pyspark.sql.window import Window
 
+# Step 1: Join order_items + products
+df = order_items.join(products, "product_id")
 
-# total sales per product
-product_sales = fact_orders.groupBy("product_id", "product_category_name") \
-    .agg(_sum("payment_value").alias("total_sales"))
+# Step 2: Calculate total sales per product per category
+product_sales = df.groupBy("product_id", "product_category_name") \
+    .agg(sum("price").alias("total_sales"))
 
+# Step 3: Define window (partition by category)
 window_spec = Window.partitionBy("product_category_name") \
     .orderBy(col("total_sales").desc())
 
-ranked_products = product_sales.withColumn(
+# Step 4: Rank products within category
+ranked_df = product_sales.withColumn(
     "rank",
     dense_rank().over(window_spec)
 )
 
-display(ranked_products.select(
-    col("product_category_name").alias("category"),
-    "product_id",
-    "total_sales",
-    "rank"
-))
+# Step 5: Filter Top 3 products per category
+top_products = ranked_df.filter(col("rank") <= 3)
 
-#Task 4: Customer Lifetime Value Calculate total spend per customer across all orders. Output:
-customer_id, total_spend
+# Step 6: Show result
+top_products.show()
 
-clv = fact_orders.groupBy("customer_id") \
-    .agg(_sum("payment_value").alias("total_spend"))
+# Task 4: Customer Lifetime Value
+from pyspark.sql.functions import sum, col
 
-display(clv)
+# Step 1: Join orders + payments
+df = orders.join(payments, "order_id")
 
-#Task 5: Customer Segmentation Apply logic: total_spend > 10000 → Gold 5000–10000 → Silver <5000
-→ Bronze Add a new column 'segment'. Then group by segment to count customers. Output:
-customer_id, total_spend, segment(changed the values to 50 and 100 instead of 5000 and 10000)
+# Step 2: Calculate total spend per customer
+clv_df = df.groupBy("customer_id") \
+    .agg(sum("payment_value").alias("customer_lifetime_value"))
 
-from pyspark.sql.functions import when
+# Step 3: Sort customers by highest CLV
+clv_df = clv_df.orderBy(col("customer_lifetime_value").desc())
 
-segmentation = clv.withColumn(
+# Step 4: Show result
+clv_df.show()
+
+# Task 5: Customer Segmentation
+from pyspark.sql.functions import sum, col, when
+
+# Step 1: Join orders + payments
+df = orders.join(payments, "order_id")
+
+# Step 2: Calculate CLV
+clv_df = df.groupBy("customer_id") \
+    .agg(sum("payment_value").alias("CLV"))
+
+# Step 3: Segment customers
+segmented_df = clv_df.withColumn(
     "segment",
-    when(col("total_spend") > 100, "Gold")
-    .when((col("total_spend") >= 50) & (col("total_spend") <= 100), "Silver")
-    .otherwise("Bronze")
+    when(col("CLV") >= 10000, "High Value")
+    .when((col("CLV") >= 5000) & (col("CLV") < 10000), "Medium Value")
+    .otherwise("Low Value")
 )
 
-# count customers per segment
-segment_count = segmentation.groupBy("segment").count()
-
-display(segmentation)
-display(segment_count)
-#segment count
-Bronze	16610
-Gold	53532
-Silver	28523
-
-#Task 6: Final Reporting Table Combine results into a single dataset containing: customer_id, city,
-total_spend, segment, total_orders
-
-
-# total orders per customer
-orders_count = fact_orders.groupBy("customer_id") \
-    .count() \
-    .withColumnRenamed("count", "total_orders")
-
-# customer city
-customer_city = fact_orders.select("customer_id", "customer_city").distinct()
-
-# final join
-final_report = segmentation \
-    .join(customer_city, "customer_id", "left") \
-    .join(orders_count, "customer_id", "left")
-
-display(final_report.select(
-    "customer_id",
-    col("customer_city").alias("city"),
-    "total_spend",
-    "segment",
-    "total_orders"
-))
+# Step 4: Show result
+segmented_df.show()
